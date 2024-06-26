@@ -63,7 +63,7 @@ func TestPublishToUrlGroup(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	res, err := client.UrlGroups().Publish(PublishOptions{
+	res, err := client.UrlGroups().Publish(PublishUrlGroupOptions{
 		UrlGroup: name,
 		Body:     "test-body",
 	})
@@ -71,6 +71,27 @@ func TestPublishToUrlGroup(t *testing.T) {
 	assert.Len(t, res, 2)
 	assert.NotEmpty(t, res[0].MessageId)
 	assert.NotEmpty(t, res[1].MessageId)
+}
+
+func TestUrlGroup_Error(t *testing.T) {
+	client := NewClientWithEnv()
+
+	name := "non_existing_url_group"
+
+	_, err := client.UrlGroups().Publish(PublishUrlGroupOptions{
+		UrlGroup: name,
+		Body:     "test-body",
+	})
+	assert.ErrorContains(t, err, "topic non_existing_url_group not found")
+}
+
+func TestUrlGroup_Empty(t *testing.T) {
+	client := NewClientWithEnv()
+
+	_, err := client.UrlGroups().Publish(PublishUrlGroupOptions{
+		Body: "test-body",
+	})
+	assert.ErrorContains(t, err, "a non-empty destination must be provided")
 }
 
 func TestEnqueueToUrlGroup(t *testing.T) {
@@ -86,9 +107,9 @@ func TestEnqueueToUrlGroup(t *testing.T) {
 	})
 	assert.NoError(t, err)
 
-	res, err := client.UrlGroups().EnqueueJSON(EnqueueJSONOptions{
+	res, err := client.UrlGroups().EnqueueJSON(EnqueueUrlGroupJSONOptions{
 		Queue: "test-queue",
-		PublishJSONOptions: PublishJSONOptions{
+		PublishUrlGroupJSONOptions: PublishUrlGroupJSONOptions{
 			UrlGroup: name,
 			Body:     map[string]any{"test": "body"},
 			Headers: map[string]string{

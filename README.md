@@ -45,3 +45,37 @@ res, _ := client.PublishJSON(qstash.PublishJSONOptions{
 fmt.Println(res.MessageId)
 ```
 
+### Create a scheduled message
+
+```
+client := qstash.NewClient("<QSTASH_TOKEN>")
+
+scheduleId, err := client.Schedules().Create(qstash.ScheduleOptions{
+    Destination: "https://example.com",
+    Cron: "*/5 * * * *",
+})
+// handle err
+
+fmt.Print(scheduleId)
+```
+
+### Receiving messages
+
+```
+receiver := qstash.NewReceiver("<CURRENT_SIGNING_KEY>", "NEXT_SIGNING_KEY")
+
+// ... in your request handler
+
+signature := req.Header.Get("Upstash-Signature")
+body, err := io.ReadAll(req.Body)
+// handle err
+
+err := receiver.Verify(qstash.VerifyOptions{
+    Signature: signature,
+    Body:      string(body),
+    Url:       "https://example.com", // optional
+})
+// handle err
+```
+
+Additional methods are available for managing url groups, schedules, and messages.
