@@ -14,7 +14,6 @@ func RetryCount(val int) *int {
 
 type PublishOptions struct {
 	Url                       string
-	UrlGroup                  string
 	Api                       string
 	Body                      string
 	Method                    string
@@ -48,9 +47,42 @@ func (m PublishOptions) headers() http.Header {
 	)
 }
 
+type PublishUrlGroupOptions struct {
+	UrlGroup                  string
+	Body                      string
+	Method                    string
+	ContentType               string
+	Headers                   map[string]string
+	Retries                   *int
+	Callback                  string
+	FailureCallback           string
+	Forward                   string
+	Delay                     string
+	NotBefore                 string
+	DeduplicationId           string
+	ContentBasedDeduplication bool
+	Timeout                   string
+}
+
+func (m PublishUrlGroupOptions) headers() http.Header {
+	return prepareHeaders(
+		m.ContentType,
+		m.Method,
+		m.Headers,
+		m.Retries,
+		m.Callback,
+		m.FailureCallback,
+		m.Delay,
+		m.NotBefore,
+		m.DeduplicationId,
+		m.ContentBasedDeduplication,
+		m.Timeout,
+		"",
+	)
+}
+
 type PublishJSONOptions struct {
 	Url                       string
-	UrlGroup                  string
 	Api                       string
 	Body                      map[string]any
 	Method                    string
@@ -67,6 +99,39 @@ type PublishJSONOptions struct {
 }
 
 func (m PublishJSONOptions) headers() http.Header {
+	return prepareHeaders(
+		"application/json",
+		m.Method,
+		m.Headers,
+		m.Retries,
+		m.Callback,
+		m.FailureCallback,
+		m.Delay,
+		m.NotBefore,
+		m.DeduplicationId,
+		m.ContentBasedDeduplication,
+		m.Timeout,
+		"",
+	)
+}
+
+type PublishUrlGroupJSONOptions struct {
+	UrlGroup                  string
+	Body                      map[string]any
+	Method                    string
+	Headers                   map[string]string
+	Retries                   *int
+	Callback                  string
+	FailureCallback           string
+	Forward                   string
+	Delay                     string
+	NotBefore                 string
+	DeduplicationId           string
+	ContentBasedDeduplication bool
+	Timeout                   string
+}
+
+func (m PublishUrlGroupJSONOptions) headers() http.Header {
 	return prepareHeaders(
 		"application/json",
 		m.Method,
@@ -105,12 +170,56 @@ func (m *EnqueueOptions) headers() http.Header {
 	)
 }
 
+type EnqueueUrlGroupOptions struct {
+	Queue string
+	PublishUrlGroupOptions
+}
+
+func (m *EnqueueUrlGroupOptions) headers() http.Header {
+	return prepareHeaders(
+		m.ContentType,
+		m.Method,
+		m.Headers,
+		m.Retries,
+		m.Callback,
+		m.FailureCallback,
+		m.Delay,
+		m.NotBefore,
+		m.DeduplicationId,
+		m.ContentBasedDeduplication,
+		m.Timeout,
+		"",
+	)
+}
+
 type EnqueueJSONOptions struct {
 	Queue string
 	PublishJSONOptions
 }
 
 func (m *EnqueueJSONOptions) headers() http.Header {
+	return prepareHeaders(
+		"application/json",
+		m.Method,
+		m.Headers,
+		m.Retries,
+		m.Callback,
+		m.FailureCallback,
+		m.Delay,
+		m.NotBefore,
+		m.DeduplicationId,
+		m.ContentBasedDeduplication,
+		m.Timeout,
+		"",
+	)
+}
+
+type EnqueueUrlGroupJSONOptions struct {
+	Queue string
+	PublishUrlGroupJSONOptions
+}
+
+func (m *EnqueueUrlGroupJSONOptions) headers() http.Header {
 	return prepareHeaders(
 		"application/json",
 		m.Method,

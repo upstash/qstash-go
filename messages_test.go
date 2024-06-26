@@ -74,18 +74,6 @@ func TestDisallowMultipleDestinations(t *testing.T) {
 		Api: "llm",
 	})
 	assert.ErrorContains(t, err, "multiple destinations found")
-
-	_, err = client.Publish(PublishOptions{
-		Url:      "https://example.com",
-		UrlGroup: "test-url-group",
-	})
-	assert.ErrorContains(t, err, "use UrlGroups() client")
-
-	_, err = client.Publish(PublishOptions{
-		UrlGroup: "test-url-group",
-		Api:      "llm",
-	})
-	assert.ErrorContains(t, err, "use UrlGroups() client")
 }
 
 func TestBatch(t *testing.T) {
@@ -111,8 +99,73 @@ func TestBatch(t *testing.T) {
 	assert.Len(t, responses, N)
 
 	for _, response := range responses {
-		assert.NotEmpty(t, response.MessageId)
+		assert.NotEmpty(t, response)
+		for _, r := range response {
+			assert.NotEmpty(t, r.MessageId)
+		}
+
 	}
+}
+
+func TestBatchMixed(t *testing.T) {
+	client := NewClientWithEnv()
+
+	name := "go_url_group"
+
+	err := client.UrlGroups().Delete(name)
+	assert.NoError(t, err)
+
+	err = client.UrlGroups().UpsertEndpoints(name, []Endpoint{
+		{Url: "https://example.com", Name: "First endpoint"},
+		{Url: "https://example.net", Name: "Second endpoint"},
+	})
+	assert.NoError(t, err)
+
+	urlGroup, err := client.UrlGroups().Get(name)
+	assert.NoError(t, err)
+	assert.Equal(t, urlGroup.Name, name)
+	assert.Len(t, urlGroup.Endpoints, 2)
+
+	N := 3
+	messages := make([]BatchOptions, N)
+
+	for i := 0; i < N; i++ {
+		if i%2 == 0 {
+			messages[i] = BatchOptions{
+				UrlGroup: name,
+				Body:     fmt.Sprintf("hi %d", i),
+				Retries:  RetryCount(0),
+				Headers: map[string]string{
+					fmt.Sprintf("test-header-%d", i): fmt.Sprintf("test-value-%d", i),
+					"Content-Type":                   "text/plain",
+				},
+			}
+		} else {
+			messages[i] = BatchOptions{
+				Body:    fmt.Sprintf("hi %d", i),
+				Url:     "https://example.com",
+				Retries: RetryCount(0),
+				Headers: map[string]string{
+					fmt.Sprintf("test-header-%d", i): fmt.Sprintf("test-value-%d", i),
+					"Content-Type":                   "text/plain",
+				},
+			}
+		}
+
+	}
+
+	responses, err := client.Batch(messages)
+	assert.NoError(t, err)
+	assert.Len(t, responses, N)
+
+	for _, response := range responses {
+		for _, r := range response {
+			assert.NotEmpty(t, r.MessageId)
+		}
+	}
+
+	err = client.UrlGroups().Delete(name)
+	assert.NoError(t, err)
 }
 
 func TestBatchJSON(t *testing.T) {
@@ -258,6 +311,48 @@ func TestTimeout(t *testing.T) {
 	assert.NotEmpty(t, res.MessageId)
 
 	AssertDeliveredEventually(t, client, res.MessageId)
+}
+
+func TestCancelMany(t *testing.T) {
+	client := NewClientWithEnv()
+
+	messageIds := []string{}
+
+	for i := 0; i < 10; i++ {
+		res, err := client.PublishJSON(PublishJSONOptions{
+			Body:  map[string]any{"ex_key": "ex_value"},
+			Url:   "https://example.com",
+			Delay: "60s",
+		})
+		assert.NoError(t, err)
+		if i%2 == 0 {
+			assert.NotEmpty(t, res.MessageId)
+			messageIds = append(messageIds, res.MessageId)
+		}
+	}
+	deleted, err := client.Messages().CancelMany(messageIds)
+	assert.NoError(t, err)
+	assert.Equal(t, 5, deleted)
+}
+
+func TestCancelAll(t *testing.T) {
+	client := NewClientWithEnv()
+
+	for i := 0; i < 10; i++ {
+		res, err := client.PublishJSON(PublishJSONOptions{
+			Body:    map[string]any{"ex_key": "ex_value"},
+			Url:     "http://httpstat.us/400",
+			Delay:   "30s",
+			Retries: RetryCount(0),
+		})
+		assert.NoError(t, err)
+		assert.NotEmpty(t, res.MessageId)
+	}
+
+	time.Sleep(1 * time.Second)
+	deleted, err := client.Messages().CancelAll()
+	assert.NoError(t, err)
+	assert.GreaterOrEqual(t, deleted, 10)
 }
 
 func AssertDeliveredEventually(t *testing.T, client *Client, messageId string) {

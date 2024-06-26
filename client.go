@@ -147,6 +147,13 @@ func (c *Client) fetchWith(opts requestOptions) ([]byte, int, error) {
 	if err != nil {
 		return nil, -1, err
 	}
+	if res.StatusCode >= http.StatusBadRequest {
+		var rErr restError
+		if err = json.Unmarshal(response, &rErr); err != nil {
+			return response, res.StatusCode, err
+		}
+		return response, res.StatusCode, errors.New(rErr.Error)
+	}
 	return response, res.StatusCode, nil
 }
 
@@ -155,21 +162,8 @@ type restError struct {
 }
 
 func parse[T any](data []byte) (t T, err error) {
-	var result T
-	var rErr restError
-	if err = json.Unmarshal(data, &rErr); err != nil {
-		if err = json.Unmarshal(data, &result); err != nil {
-			return result, err
-		}
-		return result, nil
-	}
-	if rErr.Error == "" {
-		if err = json.Unmarshal(data, &result); err != nil {
-			return result, err
-		}
-		return result, nil
-	}
-	return result, errors.New(rErr.Error)
+	err = json.Unmarshal(data, &t)
+	return
 }
 
 func getDestination(url string, urlGroup string, api string) (string, error) {

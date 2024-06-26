@@ -22,7 +22,6 @@ type Schedule struct {
 	Cron string `json:"cron"`
 	// Destination is the destination url or url group.
 	Destination string `json:"destination"`
-	Key         string `json:"key,omitempty"`
 	// Method is the HTTP method to use for the message.
 	Method string `json:"method"`
 	// Header is the headers of the message.

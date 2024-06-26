@@ -32,18 +32,10 @@ type UrlGroup struct {
 }
 
 // Publish publishes a message to QStash.
-func (u *UrlGroups) Publish(po PublishOptions) (result []PublishOrEnqueueResponse, err error) {
-	if po.UrlGroup == "" {
-		err = fmt.Errorf("specify a url group to publish message")
-		return
-	}
-	destination, err := getDestination(po.Url, po.UrlGroup, po.Api)
-	if err != nil {
-		return
-	}
+func (u *UrlGroups) Publish(po PublishUrlGroupOptions) (result []PublishOrEnqueueResponse, err error) {
 	opts := requestOptions{
 		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/publish/%s", destination),
+		path:   fmt.Sprintf("/v2/publish/%s", po.UrlGroup),
 		header: po.headers(),
 		body:   po.Body,
 	}
@@ -57,22 +49,14 @@ func (u *UrlGroups) Publish(po PublishOptions) (result []PublishOrEnqueueRespons
 
 // PublishJSON publishes a message to QStash, automatically serializing the body as JSON string,
 // and setting content type to `application/json`.
-func (u *UrlGroups) PublishJSON(message PublishJSONOptions) (result []PublishOrEnqueueResponse, err error) {
-	if message.UrlGroup == "" {
-		err = fmt.Errorf("specify a url group to publish message")
-		return
-	}
-	destination, err := getDestination(message.Url, message.UrlGroup, message.Api)
-	if err != nil {
-		return
-	}
+func (u *UrlGroups) PublishJSON(message PublishUrlGroupJSONOptions) (result []PublishOrEnqueueResponse, err error) {
 	payload, err := json.Marshal(message.Body)
 	if err != nil {
 		return
 	}
 	opts := requestOptions{
 		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/publish/%s", destination),
+		path:   fmt.Sprintf("/v2/publish/%s", message.UrlGroup),
 		header: message.headers(),
 		body:   string(payload),
 	}
@@ -85,19 +69,11 @@ func (u *UrlGroups) PublishJSON(message PublishJSONOptions) (result []PublishOrE
 }
 
 // Enqueue enqueues a message, after creating the queue if it does not exist.
-func (u *UrlGroups) Enqueue(options EnqueueOptions) (result []PublishOrEnqueueResponse, err error) {
-	if options.UrlGroup == "" {
-		err = fmt.Errorf("specify a url group to enqueue message")
-		return
-	}
-	destination, err := getDestination(options.Url, options.UrlGroup, options.Api)
-	if err != nil {
-		return
-	}
+func (u *UrlGroups) Enqueue(options EnqueueUrlGroupOptions) (result []PublishOrEnqueueResponse, err error) {
 	opts := requestOptions{
 		method: http.MethodPost,
 		header: options.headers(),
-		path:   fmt.Sprintf("/v2/enqueue/%s/%s", options.Queue, destination),
+		path:   fmt.Sprintf("/v2/enqueue/%s/%s", options.Queue, options.UrlGroup),
 		body:   options.Body,
 	}
 	response, _, err := u.client.fetchWith(opts)
@@ -110,22 +86,14 @@ func (u *UrlGroups) Enqueue(options EnqueueOptions) (result []PublishOrEnqueueRe
 
 // EnqueueJSON enqueues a message, after creating the queue if it does not exist.
 // It automatically serializes the body as JSON string, and setting content type to `application/json`.
-func (u *UrlGroups) EnqueueJSON(message EnqueueJSONOptions) (result []PublishOrEnqueueResponse, err error) {
-	if message.UrlGroup == "" {
-		err = fmt.Errorf("specify a url group to enqueue message")
-		return
-	}
-	destination, err := getDestination(message.Url, message.UrlGroup, message.Api)
-	if err != nil {
-		return
-	}
+func (u *UrlGroups) EnqueueJSON(message EnqueueUrlGroupJSONOptions) (result []PublishOrEnqueueResponse, err error) {
 	payload, err := json.Marshal(message.Body)
 	if err != nil {
 		return
 	}
 	opts := requestOptions{
 		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/enqueue/%s/%s", message.Queue, destination),
+		path:   fmt.Sprintf("/v2/enqueue/%s/%s", message.Queue, message.UrlGroup),
 		body:   string(payload),
 		header: message.headers(),
 	}
