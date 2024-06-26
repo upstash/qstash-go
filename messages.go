@@ -226,7 +226,7 @@ func (c *Client) Batch(options []BatchOptions) (results [][]PublishOrEnqueueResp
 
 // BatchJSON publishes or enqueues multiple messages in a single request,
 // automatically serializing the message bodies as JSON strings, and setting content type to `application/json`.
-func (c *Client) BatchJSON(options []BatchJSONOptions) (result []PublishOrEnqueueResponse, err error) {
+func (c *Client) BatchJSON(options []BatchJSONOptions) (results [][]PublishOrEnqueueResponse, err error) {
 	messages := make([]map[string]interface{}, len(options))
 
 	for idx, option := range options {
@@ -259,8 +259,11 @@ func (c *Client) BatchJSON(options []BatchJSONOptions) (result []PublishOrEnqueu
 	if err != nil {
 		return
 	}
-	result, err = parse[[]PublishOrEnqueueResponse](response)
-	return
+	result, err := parse[batchResponse](response)
+	if err != nil {
+		return nil, err
+	}
+	return result.responses, err
 }
 
 // Get gets the message by its id.

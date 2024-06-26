@@ -190,8 +190,71 @@ func TestBatchJSON(t *testing.T) {
 	assert.Len(t, responses, N)
 
 	for _, response := range responses {
-		assert.NotEmpty(t, response.MessageId)
+		for _, r := range response {
+			assert.NotEmpty(t, r.MessageId)
+		}
 	}
+}
+
+func TestBatchJSONMixed(t *testing.T) {
+	client := NewClientWithEnv()
+
+	name := "go_url_group"
+
+	err := client.UrlGroups().Delete(name)
+	assert.NoError(t, err)
+
+	err = client.UrlGroups().UpsertEndpoints(name, []Endpoint{
+		{Url: "https://example.com", Name: "First endpoint"},
+		{Url: "https://example.net", Name: "Second endpoint"},
+	})
+	assert.NoError(t, err)
+
+	urlGroup, err := client.UrlGroups().Get(name)
+	assert.NoError(t, err)
+	assert.Equal(t, urlGroup.Name, name)
+	assert.Len(t, urlGroup.Endpoints, 2)
+
+	N := 3
+	messages := make([]BatchJSONOptions, N)
+
+	for i := 0; i < N; i++ {
+		if i%2 == 0 {
+			messages[i] = BatchJSONOptions{
+				UrlGroup: name,
+				Body:     map[string]any{"hi": i},
+				Retries:  RetryCount(0),
+				Headers: map[string]string{
+					fmt.Sprintf("test-header-%d", i): fmt.Sprintf("test-value-%d", i),
+					"Content-Type":                   "text/plain",
+				},
+			}
+		} else {
+			messages[i] = BatchJSONOptions{
+				Body:    map[string]any{"hi": i},
+				Url:     "https://example.com",
+				Retries: RetryCount(0),
+				Headers: map[string]string{
+					fmt.Sprintf("test-header-%d", i): fmt.Sprintf("test-value-%d", i),
+					"Content-Type":                   "text/plain",
+				},
+			}
+		}
+
+	}
+
+	responses, err := client.BatchJSON(messages)
+	assert.NoError(t, err)
+	assert.Len(t, responses, N)
+
+	for _, response := range responses {
+		for _, r := range response {
+			assert.NotEmpty(t, r.MessageId)
+		}
+	}
+
+	err = client.UrlGroups().Delete(name)
+	assert.NoError(t, err)
 }
 
 func TestPublishToLlmApi(t *testing.T) {
@@ -236,9 +299,10 @@ func TestBatchLlmApi(t *testing.T) {
 	})
 	assert.NoError(t, err)
 	assert.Len(t, messages, 1)
-	assert.NotEmpty(t, messages[0].MessageId)
+	assert.Len(t, messages[0], 1)
+	assert.NotEmpty(t, messages[0][0].MessageId)
 
-	AssertDeliveredEventually(t, client, messages[0].MessageId)
+	AssertDeliveredEventually(t, client, messages[0][0].MessageId)
 }
 
 func TestEnqueue(t *testing.T) {
