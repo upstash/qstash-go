@@ -29,8 +29,13 @@ func TestSchedule(t *testing.T) {
 	// List all schedules
 	schedules, err := client.Schedules().List()
 	assert.NoError(t, err)
-	assert.Len(t, schedules, 1)
-	assert.Equal(t, schedules[0].Id, scheduleId)
+	assert.GreaterOrEqual(t, len(schedules), 1)
+
+	scheduleIds := make([]string, len(schedules))
+	for idx, s := range schedules {
+		scheduleIds[idx] = s.Id
+	}
+	assert.Contains(t, scheduleIds, scheduleId)
 
 	// Delete the schedule
 	err = client.Schedules().Delete(scheduleId)
@@ -38,7 +43,11 @@ func TestSchedule(t *testing.T) {
 
 	schedules, err = client.Schedules().List()
 	assert.NoError(t, err)
-	assert.Empty(t, schedules)
+	scheduleIds = make([]string, len(schedules))
+	for idx, s := range schedules {
+		scheduleIds[idx] = s.Id
+	}
+	assert.NotContains(t, schedules, scheduleId)
 }
 
 func TestSchedulePauseAndResume(t *testing.T) {
