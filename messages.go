@@ -299,7 +299,7 @@ func (m *Messages) CancelMany(messageIds []string) (int, error) {
 	}
 	opts := requestOptions{
 		method: http.MethodDelete,
-		path:   fmt.Sprintf("/v2/messages"),
+		path:   "/v2/messages",
 		body:   string(payload),
 		header: contentTypeJson,
 	}
@@ -318,9 +318,8 @@ func (m *Messages) CancelMany(messageIds []string) (int, error) {
 func (m *Messages) CancelAll() (int, error) {
 	opts := requestOptions{
 		method: http.MethodDelete,
-		path:   fmt.Sprintf("/v2/messages"),
+		path:   "/v2/messages",
 		header: contentTypeJson,
-		body:   "",
 	}
 	response, _, err := m.client.fetchWith(opts)
 	if err != nil {
