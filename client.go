@@ -35,6 +35,8 @@ var (
 )
 
 type Options struct {
+	// Url is the base address of QStash, it's set to https://qstash.upstash.io by default.
+	Url string
 	// Token is the authorization token from the Upstash console.
 	Token string
 	// Client is the HTTP client used for sending requests.
@@ -42,6 +44,9 @@ type Options struct {
 }
 
 func (o *Options) init() {
+	if o.Url == "" {
+		o.Url = "https://qstash.upstash.io"
+	}
 	if o.Client == nil {
 		o.Client = http.DefaultClient
 	}
@@ -71,7 +76,7 @@ func NewClientWith(options Options) *Client {
 	header.Set("Authorization", "Bearer "+options.Token)
 	base := os.Getenv(urlEnvProperty)
 	if base == "" {
-		base = "https://qstash.upstash.io"
+		base = options.Url
 	}
 	index := &Client{
 		token:   options.Token,
