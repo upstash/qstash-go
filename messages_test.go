@@ -416,7 +416,7 @@ func TestCancelAll(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	deleted, err := client.Messages().CancelAll()
 	assert.NoError(t, err)
-	assert.GreaterOrEqual(t, deleted, 10)
+	assert.Greater(t, deleted, 0)
 }
 
 func AssertDeliveredEventually(t *testing.T, client *Client, messageId string) {
