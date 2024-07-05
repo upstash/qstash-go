@@ -22,7 +22,6 @@ type PublishOptions struct {
 	Retries                   *int
 	Callback                  string
 	FailureCallback           string
-	Forward                   string
 	Delay                     string
 	NotBefore                 string
 	DeduplicationId           string
@@ -56,7 +55,6 @@ type PublishUrlGroupOptions struct {
 	Retries                   *int
 	Callback                  string
 	FailureCallback           string
-	Forward                   string
 	Delay                     string
 	NotBefore                 string
 	DeduplicationId           string
@@ -90,7 +88,6 @@ type PublishJSONOptions struct {
 	Retries                   *int
 	Callback                  string
 	FailureCallback           string
-	Forward                   string
 	Delay                     string
 	NotBefore                 string
 	DeduplicationId           string
@@ -123,7 +120,6 @@ type PublishUrlGroupJSONOptions struct {
 	Retries                   *int
 	Callback                  string
 	FailureCallback           string
-	Forward                   string
 	Delay                     string
 	NotBefore                 string
 	DeduplicationId           string
@@ -149,8 +145,21 @@ func (m PublishUrlGroupJSONOptions) headers() http.Header {
 }
 
 type EnqueueOptions struct {
-	Queue string
-	PublishOptions
+	Queue                     string
+	Url                       string
+	Api                       string
+	Body                      string
+	Method                    string
+	ContentType               string
+	Headers                   map[string]string
+	Retries                   *int
+	Callback                  string
+	FailureCallback           string
+	Delay                     string
+	NotBefore                 string
+	DeduplicationId           string
+	ContentBasedDeduplication bool
+	Timeout                   string
 }
 
 func (m *EnqueueOptions) headers() http.Header {
@@ -171,8 +180,20 @@ func (m *EnqueueOptions) headers() http.Header {
 }
 
 type EnqueueUrlGroupOptions struct {
-	Queue string
-	PublishUrlGroupOptions
+	Queue                     string
+	UrlGroup                  string
+	Body                      string
+	Method                    string
+	ContentType               string
+	Headers                   map[string]string
+	Retries                   *int
+	Callback                  string
+	FailureCallback           string
+	Delay                     string
+	NotBefore                 string
+	DeduplicationId           string
+	ContentBasedDeduplication bool
+	Timeout                   string
 }
 
 func (m *EnqueueUrlGroupOptions) headers() http.Header {
@@ -193,8 +214,20 @@ func (m *EnqueueUrlGroupOptions) headers() http.Header {
 }
 
 type EnqueueJSONOptions struct {
-	Queue string
-	PublishJSONOptions
+	Queue                     string
+	Url                       string
+	Api                       string
+	Body                      map[string]any
+	Method                    string
+	Headers                   map[string]string
+	Retries                   *int
+	Callback                  string
+	FailureCallback           string
+	Delay                     string
+	NotBefore                 string
+	DeduplicationId           string
+	ContentBasedDeduplication bool
+	Timeout                   string
 }
 
 func (m *EnqueueJSONOptions) headers() http.Header {
@@ -215,8 +248,19 @@ func (m *EnqueueJSONOptions) headers() http.Header {
 }
 
 type EnqueueUrlGroupJSONOptions struct {
-	Queue string
-	PublishUrlGroupJSONOptions
+	Queue                     string
+	UrlGroup                  string
+	Body                      map[string]any
+	Method                    string
+	Headers                   map[string]string
+	Retries                   *int
+	Callback                  string
+	FailureCallback           string
+	Delay                     string
+	NotBefore                 string
+	DeduplicationId           string
+	ContentBasedDeduplication bool
+	Timeout                   string
 }
 
 func (m *EnqueueUrlGroupJSONOptions) headers() http.Header {
@@ -309,7 +353,6 @@ type BatchOptions struct {
 	Retries                   *int
 	Callback                  string
 	FailureCallback           string
-	Forward                   string
 	Delay                     string
 	NotBefore                 string
 	DeduplicationId           string
@@ -369,7 +412,6 @@ type BatchJSONOptions struct {
 	Retries                   *int
 	Callback                  string
 	FailureCallback           string
-	Forward                   string
 	Delay                     string
 	NotBefore                 string
 	DeduplicationId           string
