@@ -310,12 +310,10 @@ func TestEnqueue(t *testing.T) {
 
 	res, err := client.Enqueue(EnqueueOptions{
 		Queue: "test-queue",
-		PublishOptions: PublishOptions{
-			Body: "test-body",
-			Url:  "https://example.com",
-			Headers: map[string]string{
-				"test-header": "test-value",
-			},
+		Body:  "test-body",
+		Url:   "https://example.com",
+		Headers: map[string]string{
+			"test-header": "test-value",
 		},
 	})
 	assert.NoError(t, err)
@@ -327,12 +325,10 @@ func TestEnqueueJSON(t *testing.T) {
 
 	res, err := client.EnqueueJSON(EnqueueJSONOptions{
 		Queue: "test-queue",
-		PublishJSONOptions: PublishJSONOptions{
-			Body: map[string]any{"test": "body"},
-			Url:  "https://example.com",
-			Headers: map[string]string{
-				"test-header": "test-value",
-			},
+		Body:  map[string]any{"test": "body"},
+		Url:   "https://example.com",
+		Headers: map[string]string{
+			"test-header": "test-value",
 		},
 	})
 	assert.NoError(t, err)
@@ -344,19 +340,17 @@ func TestEnqueueLlmApi(t *testing.T) {
 
 	res, err := client.EnqueueJSON(EnqueueJSONOptions{
 		Queue: "test-queue",
-		PublishJSONOptions: PublishJSONOptions{
-			Api: "llm",
-			Body: map[string]any{
-				"model": "meta-llama/Meta-Llama-3-8B-Instruct",
-				"messages": []map[string]string{
-					{
-						"role":    "user",
-						"content": "hello",
-					},
+		Api:   "llm",
+		Body: map[string]any{
+			"model": "meta-llama/Meta-Llama-3-8B-Instruct",
+			"messages": []map[string]string{
+				{
+					"role":    "user",
+					"content": "hello",
 				},
 			},
-			Callback: "http://example.com",
 		},
+		Callback: "http://example.com",
 	})
 
 	assert.NoError(t, err)
