@@ -108,13 +108,11 @@ func TestEnqueueToUrlGroup(t *testing.T) {
 	assert.NoError(t, err)
 
 	res, err := client.UrlGroups().EnqueueJSON(EnqueueUrlGroupJSONOptions{
-		Queue: "test-queue",
-		PublishUrlGroupJSONOptions: PublishUrlGroupJSONOptions{
-			UrlGroup: name,
-			Body:     map[string]any{"test": "body"},
-			Headers: map[string]string{
-				"test-header": "test-value",
-			},
+		Queue:    "test-queue",
+		UrlGroup: name,
+		Body:     map[string]any{"test": "body"},
+		Headers: map[string]string{
+			"test-header": "test-value",
 		},
 	})
 	assert.NoError(t, err)
