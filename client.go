@@ -123,6 +123,38 @@ func (c *Client) Queues() *Queues {
 	return &Queues{client: c}
 }
 
+// ReadinessResponse represents the response from the readiness endpoint.
+type ReadinessResponse struct {
+	// Success indicates whether the service is ready.
+	Success bool `json:"success"`
+	// Message provides additional information about the readiness status.
+	Message string `json:"message,omitempty"`
+	// StatusCode is the HTTP status code returned by the endpoint.
+	StatusCode int `json:"-"`
+}
+
+// Readiness checks if the QStash service is ready to accept requests.
+func (c *Client) Readiness() (result ReadinessResponse, err error) {
+	opts := requestOptions{
+		method: http.MethodGet,
+		path:   "/v2/readiness",
+	}
+	response, statusCode, err := c.fetchWith(opts)
+	if err != nil {
+		return ReadinessResponse{
+			Success:    false,
+			Message:    err.Error(),
+			StatusCode: statusCode,
+		}, err
+	}
+	result, err = parse[ReadinessResponse](response)
+	result.StatusCode = statusCode
+	if statusCode >= 200 && statusCode < 300 {
+		result.Success = true
+	}
+	return
+}
+
 type requestOptions struct {
 	method string
 	path   string
