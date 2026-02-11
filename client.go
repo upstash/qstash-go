@@ -123,6 +123,10 @@ func (c *Client) Queues() *Queues {
 	return &Queues{client: c}
 }
 
+func (c *Client) Readiness() *Readiness {
+	return &Readiness{client: c}
+}
+
 type requestOptions struct {
 	method string
 	path   string
