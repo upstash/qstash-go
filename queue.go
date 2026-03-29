@@ -1,6 +1,7 @@
 package qstash
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -14,101 +15,94 @@ type Queues struct {
 	client *Client
 }
 
-type QueueWithLag struct {
+type Queue struct {
 	// Name is the name of the queue.
 	Name string `json:"name"`
 	// Parallelism is the number of parallel consumers consuming from the queue.
 	Parallelism int `json:"parallelism"`
 	// CreatedAt is the creation time of the queue, in unix milliseconds.
-	CreatedAt int64 `json:"createdAt"`
+	CreatedAt int64 `json:"createdAt,omitempty"`
 	// UpdatedAt is the last update time of the queue, in unix milliseconds
-	UpdatedAt int64 `json:"updatedAt"`
+	UpdatedAt int64 `json:"updatedAt,omitempty"`
 	// Lag is the number of unprocessed messages that exist in the queue.
 	Lag int64 `json:"lag"`
 	// IsPaused is whether the queue is paused or not.
 	IsPaused bool `json:"paused"`
 }
 
-type Queue struct {
-	// Name is the name of the queue
-	Name string `json:"queueName" validate:"required"`
-	// Parallelism is the number of parallel consumers consuming from the queue.
-	Parallelism int `json:"parallelism"`
-	// IsPaused is whether the queue is paused or not.
-	IsPaused bool `json:"paused"`
-}
-
 // Upsert updates or creates a queue.
-func (c *Queues) Upsert(queue Queue) (err error) {
-	payload, err := json.Marshal(queue)
+func (q *Queues) Upsert(queueName string, opts ...QueueOption) error {
+	options := &queueOptions{}
+	for _, option := range opts {
+		option(options)
+	}
+	options.QueueName = queueName
+	payload, err := json.Marshal(options)
 	if err != nil {
-		return
+		return err
 	}
-	opts := requestOptions{
-		method: http.MethodPost,
-		path:   "/v2/queues",
-		body:   string(payload),
-		header: contentTypeJson,
-	}
-	_, _, err = c.client.fetchWith(opts)
-	return
+	_, _, err = q.client.fetchWith(request{
+		method:      http.MethodPost,
+		path:        "/v2/queues",
+		body:        bytes.NewReader(payload),
+		contentType: "application/json",
+	})
+	return err
 }
 
 // Get retrieves a queue by its name.
-func (c *Queues) Get(name string) (schedule QueueWithLag, err error) {
-	opts := requestOptions{
+func (q *Queues) Get(name string) (Queue, error) {
+	opts := request{
 		method: http.MethodGet,
 		path:   fmt.Sprintf("/v2/queues/%s", name),
 	}
-	response, _, err := c.client.fetchWith(opts)
+	data, _, err := q.client.fetchWith(opts)
 	if err != nil {
-		return
+		return Queue{}, err
 	}
-	schedule, err = parse[QueueWithLag](response)
-	return
+	return parse[Queue](data)
 }
 
 // List retrieves all queues.
-func (c *Queues) List() (schedules []QueueWithLag, err error) {
-	opts := requestOptions{
+func (q *Queues) List() ([]Queue, error) {
+	opts := request{
 		method: http.MethodGet,
 		path:   "/v2/queues",
 	}
-	response, _, err := c.client.fetchWith(opts)
+	data, _, err := q.client.fetchWith(opts)
 	if err != nil {
-		return
+		return nil, err
 	}
-	schedules, err = parse[[]QueueWithLag](response)
-	return
+	return parse[[]Queue](data)
 }
 
 // Delete deletes a queue by its name.
-func (c *Queues) Delete(queue string) (err error) {
-	opts := requestOptions{
+func (q *Queues) Delete(queueName string) (err error) {
+	opts := request{
 		method: http.MethodDelete,
-		path:   fmt.Sprintf("/v2/queues/%s", queue),
+		path:   fmt.Sprintf("/v2/queues/%s", queueName),
 	}
-	_, _, err = c.client.fetchWith(opts)
+	_, _, err = q.client.fetchWith(opts)
 	return
 }
 
 // Pause pauses the queue.
 // A paused queue will not deliver messages until it is resumed.
-func (c *Queues) Pause(queue string) (err error) {
-	opts := requestOptions{
+func (q *Queues) Pause(queueName string) error {
+	opts := request{
 		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/queues/%s/pause", queue),
+		path:   fmt.Sprintf("/v2/queues/%s/pause", queueName),
 	}
-	_, _, err = c.client.fetchWith(opts)
-	return
+	_, _, err := q.client.fetchWith(opts)
+	return err
 }
 
 // Resume resumes the queue.
-func (c *Queues) Resume(queue string) (err error) {
-	opts := requestOptions{
+func (q *Queues) Resume(queueName string) error {
+	opts := request{
 		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/queues/%s/resume", queue),
+		path:   fmt.Sprintf("/v2/queues/%s/resume", queueName),
 	}
-	_, _, err = c.client.fetchWith(opts)
-	return
+	_, _, err := q.client.fetchWith(opts)
+	return err
 }

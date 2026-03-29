@@ -1,6 +1,7 @@
 package qstash
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -43,232 +44,11 @@ type Message struct {
 	CallerIP string `json:"callerIP,omitempty"`
 	// Queue is the queue name if this message was enqueued to a queue.
 	Queue string `json:"queueName,omitempty"`
-	// Api is the api name if this message was sent to an api.
-	Api string `json:"api,omitempty"`
-}
-
-type PublishOrEnqueueResponse struct {
-	// MessageId is the unique identifier of new message.
-	MessageId string `json:"messageId"`
-	// Deduplicated indicates whether the message is a duplicate that was not sent to the destination.
-	Deduplicated bool `json:"deduplicated,omitempty"`
-	// Url is the target address of the message if it was sent to a URL group, empty otherwise.
-	Url string `json:"url,omitempty"`
-}
-
-type batchResponse struct {
-	responses [][]PublishOrEnqueueResponse
-}
-
-func (b *batchResponse) UnmarshalJSON(data []byte) (err error) {
-	switch {
-	case len(data) == 0 || string(data) == `null`:
-		return nil
-	case data[0] == '[':
-		var t []interface{}
-		if err = json.Unmarshal(data, &t); err != nil {
-			return
-		}
-		for _, v := range t {
-			if _, ok := v.([]interface{}); ok {
-				var result []PublishOrEnqueueResponse
-				response, jErr := json.Marshal(v)
-				if jErr != nil {
-					return
-				}
-				if err = json.Unmarshal(response, &result); err != nil {
-					return
-				}
-				b.responses = append(b.responses, result)
-			} else {
-				var result PublishOrEnqueueResponse
-				response, jErr := json.Marshal(v)
-				if jErr != nil {
-					return
-				}
-				if err = json.Unmarshal(response, &result); err != nil {
-					return
-				}
-				b.responses = append(b.responses, []PublishOrEnqueueResponse{result})
-			}
-		}
-	default:
-		return fmt.Errorf("unsupported json type")
-	}
-	return nil
-}
-
-// Publish publishes a message to QStash.
-func (c *Client) Publish(options PublishOptions) (result PublishOrEnqueueResponse, err error) {
-	destination, err := getDestination(options.Url, "", options.Api)
-	if err != nil {
-		return
-	}
-	opts := requestOptions{
-		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/publish/%s", destination),
-		header: options.headers(),
-		body:   options.Body,
-	}
-	response, _, err := c.fetchWith(opts)
-	if err != nil {
-		return
-	}
-	result, err = parse[PublishOrEnqueueResponse](response)
-	return
-}
-
-// PublishJSON publishes a message to QStash, automatically serializing the body as JSON string,
-// and setting content type to `application/json`.
-func (c *Client) PublishJSON(options PublishJSONOptions) (result PublishOrEnqueueResponse, err error) {
-	destination, err := getDestination(options.Url, "", options.Api)
-	if err != nil {
-		return
-	}
-	payload, err := json.Marshal(options.Body)
-	if err != nil {
-		return
-	}
-	opts := requestOptions{
-		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/publish/%s", destination),
-		header: options.headers(),
-		body:   string(payload),
-	}
-	response, _, err := c.fetchWith(opts)
-	if err != nil {
-		return
-	}
-	result, err = parse[PublishOrEnqueueResponse](response)
-	return
-}
-
-// Enqueue enqueues a message, after creating the queue if it does not exist.
-func (c *Client) Enqueue(options EnqueueOptions) (result PublishOrEnqueueResponse, err error) {
-	destination, err := getDestination(options.Url, "", options.Api)
-	if err != nil {
-		return
-	}
-	opts := requestOptions{
-		method: http.MethodPost,
-		header: options.headers(),
-		path:   fmt.Sprintf("/v2/enqueue/%s/%s", options.Queue, destination),
-		body:   options.Body,
-	}
-	response, _, err := c.fetchWith(opts)
-	if err != nil {
-		return
-	}
-	result, err = parse[PublishOrEnqueueResponse](response)
-	return
-}
-
-// EnqueueJSON enqueues a message, after creating the queue if it does not exist.
-// It automatically serializes the body as JSON string, and setting content type to `application/json`.
-func (c *Client) EnqueueJSON(options EnqueueJSONOptions) (result PublishOrEnqueueResponse, err error) {
-	destination, err := getDestination(options.Url, "", options.Api)
-	if err != nil {
-		return
-	}
-	payload, err := json.Marshal(options.Body)
-	if err != nil {
-		return
-	}
-	opts := requestOptions{
-		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/enqueue/%s/%s", options.Queue, destination),
-		body:   string(payload),
-		header: options.headers(),
-	}
-	response, _, err := c.fetchWith(opts)
-	if err != nil {
-		return
-	}
-	result, err = parse[PublishOrEnqueueResponse](response)
-	return
-}
-
-// Batch publishes or enqueues multiple messages in a single request.
-func (c *Client) Batch(options []BatchOptions) (results [][]PublishOrEnqueueResponse, err error) {
-	messages := make([]map[string]interface{}, len(options))
-	for idx, option := range options {
-		destination, err := getDestination(option.Url, option.UrlGroup, option.Api)
-		if err != nil {
-			return nil, err
-		}
-		messages[idx] = map[string]interface{}{
-			"destination": destination,
-			"headers":     option.headers(),
-			"body":        option.Body,
-			"queue":       option.Queue,
-		}
-	}
-	payload, err := json.Marshal(messages)
-	if err != nil {
-		return
-	}
-	opts := requestOptions{
-		method: http.MethodPost,
-		path:   "/v2/batch",
-		body:   string(payload),
-		header: map[string][]string{"Content-Type": {"application/json"}},
-	}
-	response, _, err := c.fetchWith(opts)
-	if err != nil {
-		return
-	}
-	result, err := parse[batchResponse](response)
-	if err != nil {
-		return nil, err
-	}
-	return result.responses, err
-}
-
-// BatchJSON publishes or enqueues multiple messages in a single request,
-// automatically serializing the message bodies as JSON strings, and setting content type to `application/json`.
-func (c *Client) BatchJSON(options []BatchJSONOptions) (results [][]PublishOrEnqueueResponse, err error) {
-	messages := make([]map[string]interface{}, len(options))
-
-	for idx, option := range options {
-		destination, err := getDestination(option.Url, option.UrlGroup, option.Api)
-		if err != nil {
-			return nil, err
-		}
-		body, err := json.Marshal(option.Body)
-		if err != nil {
-			return nil, err
-		}
-		messages[idx] = map[string]interface{}{
-			"destination": destination,
-			"headers":     option.headers(),
-			"body":        string(body),
-			"queue":       option.Queue,
-		}
-	}
-	payload, err := json.Marshal(messages)
-	if err != nil {
-		return
-	}
-	opts := requestOptions{
-		method: http.MethodPost,
-		path:   "/v2/batch",
-		body:   string(payload),
-		header: contentTypeJson,
-	}
-	response, _, err := c.fetchWith(opts)
-	if err != nil {
-		return
-	}
-	result, err := parse[batchResponse](response)
-	if err != nil {
-		return nil, err
-	}
-	return result.responses, err
 }
 
 // Get gets the message by its id.
-func (m *Messages) Get(messageId string) (message Message, err error) {
-	opts := requestOptions{
+func (m *Messages) Get(messageId string) (Message, error) {
+	opts := request{
 		method: http.MethodGet,
 		path:   fmt.Sprintf("/v2/messages/%s", messageId),
 	}
@@ -276,8 +56,7 @@ func (m *Messages) Get(messageId string) (message Message, err error) {
 	if err != nil {
 		return Message{}, err
 	}
-	message, err = parse[Message](response)
-	return
+	return parse[Message](response)
 }
 
 // Cancel cancels delivery of an existing message.
@@ -286,7 +65,7 @@ func (m *Messages) Get(messageId string) (message Message, err error) {
 // delivered in the future. If a message is in flight to your API,
 // it might be too late to cancel.
 func (m *Messages) Cancel(messageId string) error {
-	opts := requestOptions{
+	opts := request{
 		method: http.MethodDelete,
 		path:   fmt.Sprintf("/v2/messages/%s", messageId),
 	}
@@ -300,11 +79,11 @@ func (m *Messages) CancelMany(messageIds []string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	opts := requestOptions{
-		method: http.MethodDelete,
-		path:   "/v2/messages",
-		body:   string(payload),
-		header: contentTypeJson,
+	opts := request{
+		method:      http.MethodDelete,
+		path:        "/v2/messages",
+		body:        bytes.NewReader(payload),
+		contentType: "application/json",
 	}
 	response, _, err := m.client.fetchWith(opts)
 	if err != nil {
@@ -319,10 +98,10 @@ func (m *Messages) CancelMany(messageIds []string) (int, error) {
 
 // CancelAll cancels delivery of all existing messages.
 func (m *Messages) CancelAll() (int, error) {
-	opts := requestOptions{
-		method: http.MethodDelete,
-		path:   "/v2/messages",
-		header: contentTypeJson,
+	opts := request{
+		method:      http.MethodDelete,
+		path:        "/v2/messages",
+		contentType: "application/json",
 	}
 	response, _, err := m.client.fetchWith(opts)
 	if err != nil {

@@ -1,6 +1,7 @@
 package qstash
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -32,170 +33,124 @@ type UrlGroup struct {
 }
 
 // Publish publishes a message to QStash.
-func (u *UrlGroups) Publish(po PublishUrlGroupOptions) (result []PublishOrEnqueueResponse, err error) {
-	opts := requestOptions{
+func (u *UrlGroups) Publish(urlGroup string, o ...PublishOption) ([]MessageReceipt, error) {
+	opts := request{
 		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/publish/%s", po.UrlGroup),
-		header: po.headers(),
-		body:   po.Body,
+		path:   fmt.Sprintf("/v2/publish/%s", urlGroup),
+	}
+	for _, opt := range o {
+		err := opt(&opts)
+		if err != nil {
+			return nil, err
+		}
 	}
 	response, _, err := u.client.fetchWith(opts)
 	if err != nil {
-		return
+		return nil, err
 	}
-	result, err = parse[[]PublishOrEnqueueResponse](response)
-	return
-}
-
-// PublishJSON publishes a message to QStash, automatically serializing the body as JSON string,
-// and setting content type to `application/json`.
-func (u *UrlGroups) PublishJSON(message PublishUrlGroupJSONOptions) (result []PublishOrEnqueueResponse, err error) {
-	payload, err := json.Marshal(message.Body)
-	if err != nil {
-		return
-	}
-	opts := requestOptions{
-		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/publish/%s", message.UrlGroup),
-		header: message.headers(),
-		body:   string(payload),
-	}
-	response, _, err := u.client.fetchWith(opts)
-	if err != nil {
-		return
-	}
-	result, err = parse[[]PublishOrEnqueueResponse](response)
-	return
+	return parse[[]MessageReceipt](response)
 }
 
 // Enqueue enqueues a message, after creating the queue if it does not exist.
-func (u *UrlGroups) Enqueue(options EnqueueUrlGroupOptions) (result []PublishOrEnqueueResponse, err error) {
-	opts := requestOptions{
+func (u *UrlGroups) Enqueue(urlGroup string, queueName string, o ...EnqueueOption) ([]MessageReceipt, error) {
+	opts := request{
 		method: http.MethodPost,
-		header: options.headers(),
-		path:   fmt.Sprintf("/v2/enqueue/%s/%s", options.Queue, options.UrlGroup),
-		body:   options.Body,
+		path:   fmt.Sprintf("/v2/enqueue/%s/%s", queueName, urlGroup),
+	}
+	for _, opt := range o {
+		err := opt(&opts)
+		if err != nil {
+			return nil, err
+		}
 	}
 	response, _, err := u.client.fetchWith(opts)
 	if err != nil {
-		return
+		return nil, err
 	}
-	result, err = parse[[]PublishOrEnqueueResponse](response)
-	return
-}
-
-// EnqueueJSON enqueues a message, after creating the queue if it does not exist.
-// It automatically serializes the body as JSON string, and setting content type to `application/json`.
-func (u *UrlGroups) EnqueueJSON(message EnqueueUrlGroupJSONOptions) (result []PublishOrEnqueueResponse, err error) {
-	payload, err := json.Marshal(message.Body)
-	if err != nil {
-		return
-	}
-	opts := requestOptions{
-		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/enqueue/%s/%s", message.Queue, message.UrlGroup),
-		body:   string(payload),
-		header: message.headers(),
-	}
-	response, _, err := u.client.fetchWith(opts)
-	if err != nil {
-		return
-	}
-	result, err = parse[[]PublishOrEnqueueResponse](response)
-	return
+	return parse[[]MessageReceipt](response)
 }
 
 // UpsertEndpoints adds or updates one or more endpoints to an url group.
 // If the url group or the endpoint does not exist, it will be created.
 // If the endpoint exists, it will be updated.
-func (u *UrlGroups) UpsertEndpoints(urlGroup string, endpoints []Endpoint) (err error) {
+func (u *UrlGroups) UpsertEndpoints(urlGroup string, endpoints []Endpoint) error {
 	for _, endpoint := range endpoints {
 		if endpoint.Url == "" {
-			err = fmt.Errorf("`url` of the endpoint must be provided")
-			return
+			return fmt.Errorf("`url` of the endpoint must be provided")
 		}
 	}
 	payload, err := json.Marshal(map[string][]Endpoint{
 		"endpoints": endpoints,
 	})
 	if err != nil {
-		return
+		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
-	opts := requestOptions{
-		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/topics/%s/endpoints", urlGroup),
-		body:   string(payload),
-		header: contentTypeJson,
+	opts := request{
+		method:      http.MethodPost,
+		path:        fmt.Sprintf("/v2/topics/%s/endpoints", urlGroup),
+		body:        bytes.NewReader(payload),
+		contentType: "application/json",
 	}
 	_, _, err = u.client.fetchWith(opts)
-	return
+	return err
 }
 
 // RemoveEndpoints removes one or more endpoints from an url group.
 // If all endpoints have been removed, the url group will be deleted.
-func (u *UrlGroups) RemoveEndpoints(urlGroup string, endpoints []Endpoint) (err error) {
+func (u *UrlGroups) RemoveEndpoints(urlGroup string, endpoints []Endpoint) error {
 	for _, endpoint := range endpoints {
 		if endpoint.Url == "" && endpoint.Name == "" {
-			err = fmt.Errorf("one of `url` or `name` of the endpoint must be provided")
-			return
+			return fmt.Errorf("either `url` or `name` of the endpoint must be provided")
 		}
 	}
 	payload, err := json.Marshal(map[string][]Endpoint{
 		"endpoints": endpoints,
 	})
 	if err != nil {
-		return
+		return err
 	}
-	opts := requestOptions{
-		method: http.MethodDelete,
-		path:   fmt.Sprintf("/v2/topics/%s/endpoints", urlGroup),
-		body:   string(payload),
-		header: contentTypeJson,
+	opts := request{
+		method:      http.MethodDelete,
+		path:        fmt.Sprintf("/v2/topics/%s/endpoints", urlGroup),
+		body:        bytes.NewReader(payload),
+		contentType: "application/json",
 	}
 	_, _, err = u.client.fetchWith(opts)
-	return
+	return err
 }
 
 // Get retrieves the url group by its name.
-func (u *UrlGroups) Get(urlGroup string) (result UrlGroup, err error) {
-	opts := requestOptions{
+func (u *UrlGroups) Get(urlGroup string) (UrlGroup, error) {
+	opts := request{
 		method: http.MethodGet,
 		path:   fmt.Sprintf("/v2/topics/%s", urlGroup),
 	}
 	response, _, err := u.client.fetchWith(opts)
 	if err != nil {
-		return
+		return UrlGroup{}, err
 	}
-	result, err = parse[UrlGroup](response)
-	if err != nil {
-		return
-	}
-	return
+	return parse[UrlGroup](response)
 }
 
 // List retrieves all the url groups.
-func (u *UrlGroups) List() (result []UrlGroup, err error) {
-	opts := requestOptions{
+func (u *UrlGroups) List() ([]UrlGroup, error) {
+	opts := request{
 		method: http.MethodGet,
 		path:   "/v2/topics",
 	}
 	response, _, err := u.client.fetchWith(opts)
 	if err != nil {
-		return
+		return nil, err
 	}
-	result, err = parse[[]UrlGroup](response)
-	if err != nil {
-		return
-	}
-	return
+	return parse[[]UrlGroup](response)
 }
 
 // Delete deletes the url group and all its endpoints.
-func (u *UrlGroups) Delete(urlGroup string) (err error) {
-	opts := requestOptions{
+func (u *UrlGroups) Delete(urlGroup string) error {
+	opts := request{
 		method: http.MethodDelete,
 		path:   fmt.Sprintf("/v2/topics/%s", urlGroup),
 	}
-	_, _, err = u.client.fetchWith(opts)
-	return
+	_, _, err := u.client.fetchWith(opts)
+	return err
 }

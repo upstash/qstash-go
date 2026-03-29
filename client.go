@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"strings"
 )
 
 const (
@@ -21,17 +20,15 @@ const (
 	upstashRetriesHeader             = "Upstash-Retries"
 	upstashCallbackHeader            = "Upstash-Callback"
 	upstashFailureCallbackHeader     = "Upstash-Failure-Callback"
-	upstashForwardHeader             = "Upstash-Forward"
 	upstashCronHeader                = "Upstash-Cron"
 	upstashDelayHeader               = "Upstash-Delay"
 	upstashTimeoutHeader             = "Upstash-Timeout"
 	upstashDeduplicationId           = "Upstash-Deduplication-Id"
 	upstashNotBefore                 = "Upstash-Not-Before"
 	upstashContentBasedDeduplication = "Upstash-Content-Based-Deduplication"
-)
-
-var (
-	contentTypeJson = http.Header{"Content-Type": []string{"application/json"}}
+	upstashScheduleId                = "Upstash-Schedule-Id"
+	upstashRetryDelayHeader          = "Upstash-Retry-Delay"
+	upstashLabelHeader               = "Upstash-Label"
 )
 
 type Options struct {
@@ -56,21 +53,21 @@ func (o *Options) init() {
 }
 
 // NewClient initializes a client instance with the given token and the default HTTP client.
-func NewClient(token string) *Client {
+func NewClient(token string) (*Client, error) {
 	return NewClientWith(Options{
 		Token: token,
 	})
 }
 
 // NewClientWithEnv initializes a client with the token from the QSTASH_TOKEN environment variable and the default HTTP client.
-func NewClientWithEnv() *Client {
+func NewClientWithEnv() (*Client, error) {
 	return NewClientWith(Options{
 		Token: os.Getenv(tokenEnvProperty),
 	})
 }
 
 // NewClientWith initializes a client with the given token and HTTP client.
-func NewClientWith(options Options) *Client {
+func NewClientWith(options Options) (*Client, error) {
 	options.init()
 	header := http.Header{}
 	header.Set("Authorization", "Bearer "+options.Token)
@@ -78,14 +75,22 @@ func NewClientWith(options Options) *Client {
 	if base == "" {
 		base = options.Url
 	}
-	index := &Client{
+	client := &Client{
 		token:   options.Token,
 		client:  options.Client,
 		url:     base,
 		headers: header,
 	}
-
-	return index
+	client.Publish = func(destination string, o ...PublishOption) (MessageReceipt, error) {
+		return publish(client, destination, o...)
+	}
+	client.Enqueue = func(url string, queueName string, o ...EnqueueOption) (MessageReceipt, error) {
+		return enqueue(client, url, queueName, o...)
+	}
+	client.Batch = func(options [][]BatchOption) (results [][]MessageReceipt, err error) {
+		return batch(client, options)
+	}
+	return client, nil
 }
 
 type Client struct {
@@ -93,61 +98,50 @@ type Client struct {
 	client  *http.Client
 	url     string
 	headers http.Header
+
+	Schedules *Schedules
+	Dlq       *Dlq
+	Logs      *Logs
+	UrlGroups *UrlGroups
+	Keys      *Keys
+	Messages  *Messages
+	Queues    *Queues
+
+	Publish Publish
+	Enqueue Enqueue
+	Batch   Batch
 }
 
-func (c *Client) Schedules() *Schedules {
-	return &Schedules{client: c}
+type request struct {
+	method      string
+	path        string
+	body        io.Reader
+	header      http.Header
+	params      url.Values
+	contentType string
 }
 
-func (c *Client) Dlq() *Dlq {
-	return &Dlq{client: c}
-}
-
-func (c *Client) Events() *Events {
-	return &Events{client: c}
-}
-
-func (c *Client) UrlGroups() *UrlGroups {
-	return &UrlGroups{client: c}
-}
-
-func (c *Client) Keys() *Keys {
-	return &Keys{client: c}
-}
-
-func (c *Client) Messages() *Messages {
-	return &Messages{client: c}
-}
-
-func (c *Client) Queues() *Queues {
-	return &Queues{client: c}
-}
-
-type requestOptions struct {
-	method string
-	path   string
-	body   string
-	header http.Header
-	params url.Values
-}
-
-func (c *Client) fetchWith(opts requestOptions) ([]byte, int, error) {
-	request, err := http.NewRequest(opts.method, fmt.Sprintf("%s%s", c.url, opts.path), strings.NewReader(opts.body))
+func (c *Client) fetchWith(opts request) ([]byte, int, error) {
+	req, err := http.NewRequest(opts.method, fmt.Sprintf("%s%s", c.url, opts.path), opts.body)
 	if err != nil {
 		return nil, -1, err
 	}
 	if opts.params != nil {
-		request.URL.RawQuery = opts.params.Encode()
+		req.URL.RawQuery = opts.params.Encode()
 	}
 	hc := c.headers.Clone()
 	for k, v := range opts.header {
 		hc.Set(k, v[0])
 	}
-	request.Header = hc
-	res, err := c.client.Do(request)
+	req.Header = hc
+	if opts.contentType != "" {
+		req.Header.Set("Content-Type", opts.contentType)
+	}
+	res, err := c.client.Do(req)
 	if err != nil {
 		return nil, -1, err
 	}
+	defer res.Body.Close()
 	response, err := io.ReadAll(res.Body)
 	if err != nil {
 		return nil, -1, err
@@ -169,82 +163,4 @@ type restError struct {
 func parse[T any](data []byte) (t T, err error) {
 	err = json.Unmarshal(data, &t)
 	return
-}
-
-func getDestination(url string, urlGroup string, api string) (string, error) {
-	destination := ""
-	count := 0
-	if url != "" {
-		destination = url
-		count++
-	}
-	if urlGroup != "" {
-		destination = urlGroup
-		count++
-	}
-	if api != "" {
-		destination = fmt.Sprintf("api/%s", api)
-		count++
-	}
-	if count != 1 {
-		return "", fmt.Errorf("multiple destinations found, configure only one of Url, UrlGroup or Api")
-	}
-	return destination, nil
-}
-
-func prepareHeaders(
-	contentType string,
-	method string,
-	headers map[string]string,
-	retries *int,
-	callback string,
-	failureCallback string,
-	delay string,
-	notBefore string,
-	deduplicationId string,
-	contentBasedDeduplication bool,
-	timeout string,
-	cron string,
-) http.Header {
-	header := http.Header{}
-	if contentType != "" {
-		header.Set("Content-Type", contentType)
-	}
-	if method != "" {
-		header.Set(upstashMethodHeader, method)
-	}
-	for k, v := range headers {
-		if !strings.HasPrefix(strings.ToLower(k), "upstash-forward-") {
-			k = fmt.Sprintf("%s-%s", upstashForwardHeader, k)
-		}
-		header.Set(k, v)
-	}
-	if retries != nil {
-		header.Set(upstashRetriesHeader, fmt.Sprintf("%d", *retries))
-	}
-	if callback != "" {
-		header.Set(upstashCallbackHeader, callback)
-	}
-	if failureCallback != "" {
-		header.Set(upstashFailureCallbackHeader, failureCallback)
-	}
-	if delay != "" {
-		header.Set(upstashDelayHeader, delay)
-	}
-	if notBefore != "" {
-		header.Set(upstashNotBefore, notBefore)
-	}
-	if deduplicationId != "" {
-		header.Set(upstashDeduplicationId, deduplicationId)
-	}
-	if contentBasedDeduplication {
-		header.Set(upstashContentBasedDeduplication, "true")
-	}
-	if timeout != "" {
-		header.Set(upstashTimeoutHeader, timeout)
-	}
-	if cron != "" {
-		header.Set(upstashCronHeader, cron)
-	}
-	return header
 }
