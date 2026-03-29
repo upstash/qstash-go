@@ -1,6 +1,7 @@
 package qstash
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -59,7 +60,7 @@ type listDlqResponse struct {
 
 // Get retrieves a message from the DLQ by its unique ID.
 func (d *Dlq) Get(dlqId string) (dlqMessage DlqMessage, err error) {
-	opts := requestOptions{
+	opts := request{
 		method: http.MethodGet,
 		path:   fmt.Sprintf("/v2/dlq/%s", dlqId),
 	}
@@ -72,26 +73,31 @@ func (d *Dlq) Get(dlqId string) (dlqMessage DlqMessage, err error) {
 }
 
 // List retrieves all messages currently in the Dlq.
-func (d *Dlq) List(options ListDlqOptions) (messages []DlqMessage, cursor string, err error) {
-	opts := requestOptions{
+func (d *Dlq) List(o ...DlqOption) ([]DlqMessage, string, error) {
+	opts := request{
 		method: http.MethodGet,
 		path:   "/v2/dlq",
-		params: options.params(),
+	}
+	for _, opt := range o {
+		err := opt(&opts)
+		if err != nil {
+			return nil, "", err
+		}
 	}
 	response, _, err := d.client.fetchWith(opts)
 	if err != nil {
-		return
+		return nil, "", err
 	}
 	result, err := parse[listDlqResponse](response)
 	if err != nil {
-		return
+		return nil, "", err
 	}
 	return result.Messages, result.Cursor, nil
 }
 
 // Delete deletes a message from the Dlq by its unique ID.
 func (d *Dlq) Delete(dlqId string) error {
-	opts := requestOptions{
+	opts := request{
 		method: http.MethodDelete,
 		path:   fmt.Sprintf("/v2/dlq/%s", dlqId),
 	}
@@ -105,10 +111,10 @@ func (d *Dlq) DeleteMany(dlqIds []string) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	opts := requestOptions{
+	opts := request{
 		method: http.MethodDelete,
 		path:   "/v2/dlq",
-		body:   string(payload),
+		body:   bytes.NewReader(payload),
 		header: map[string][]string{"Content-Type": {"application/json"}},
 	}
 	response, _, err := d.client.fetchWith(opts)

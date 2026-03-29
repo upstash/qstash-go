@@ -15,7 +15,7 @@ type SigningKeys struct {
 
 // Get retrieves the current and next signing keys.
 func (k *Keys) Get() (keys SigningKeys, err error) {
-	opts := requestOptions{
+	opts := request{
 		method: http.MethodGet,
 		path:   "/v2/keys",
 	}
@@ -30,7 +30,7 @@ func (k *Keys) Get() (keys SigningKeys, err error) {
 // Rotate rotates the current signing key and gets the new signing key.
 // The next signing key becomes the current signing key, and a new signing key is assigned to the next signing key.
 func (k *Keys) Rotate() (keys SigningKeys, err error) {
-	opts := requestOptions{
+	opts := request{
 		method: http.MethodPost,
 		path:   "/v2/rotate",
 	}

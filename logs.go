@@ -2,33 +2,32 @@ package qstash
 
 import (
 	"net/http"
-	"time"
 )
 
-type Events struct {
+type Logs struct {
 	client *Client
 }
 
-type EventState string
+type LogState string
 
 var (
-	Created         EventState = "CREATED"
-	Active          EventState = "ACTIVE"
-	Retry           EventState = "RETRY"
-	Error           EventState = "ERROR"
-	Delivered       EventState = "DELIVERED"
-	Failed          EventState = "FAILED"
-	CancelRequested EventState = "CANCEL_REQUESTED"
-	Canceled        EventState = "CANCELED"
+	Created         LogState = "CREATED"
+	Active          LogState = "ACTIVE"
+	Retry           LogState = "RETRY"
+	Error           LogState = "ERROR"
+	Delivered       LogState = "DELIVERED"
+	Failed          LogState = "FAILED"
+	CancelRequested LogState = "CANCEL_REQUESTED"
+	Canceled        LogState = "CANCELED"
 )
 
-type Event struct {
+type Log struct {
 	// Time is the timestamp of this event in Unix time (milliseconds).
 	Time int64 `json:"time"`
 	// MessageId is the ID of associated message.
 	MessageId string `json:"messageId"`
 	// State is the current state of the message.
-	State EventState `json:"state"`
+	State LogState `json:"state"`
 	// Error is set only if the status of the message is an error.
 	Error string `json:"error,omitempty"`
 	// NextDeliveryTime is the next scheduled time of the message in milliseconds
@@ -47,40 +46,24 @@ type Event struct {
 	ScheduleId string `json:"scheduleId,omitempty"`
 }
 
-type EventFilter struct {
-	// MessageId filters events by the ID of the message.
-	MessageId string
-	// State filters events by the state of the message.
-	State EventState
-	// Url filters events by the URL of the message.
-	Url string
-	// UrlGroup filters events by URL group of the message.
-	UrlGroup string
-	// Api filters events by the API name of the message.
-	Api string
-	// Queue filters events by queue name.
-	Queue string
-	// ScheduleId filters events by schedule ID.
-	ScheduleId string
-	// FromDate filters events by starting time in milliseconds.
-	FromDate time.Time
-	// ToDate filters events by ending time in milliseconds.
-	ToDate time.Time
-}
-
 type listEventsResponse struct {
-	Cursor string  `json:"cursor,omitempty"`
-	Events []Event `json:"events"`
+	Cursor string `json:"cursor,omitempty"`
+	Events []Log  `json:"events"`
 }
 
 // List retrieves all events that occurred, such as message creation or delivery.
-func (e *Events) List(options ListEventsOptions) ([]Event, string, error) {
-	opts := requestOptions{
+func (l *Logs) List(o ...LogsOptions) ([]Log, string, error) {
+	opts := request{
 		method: http.MethodGet,
 		path:   "/v2/events",
-		params: options.Params(),
 	}
-	response, _, err := e.client.fetchWith(opts)
+	for _, opt := range o {
+		err := opt(&opts)
+		if err != nil {
+			return nil, "", err
+		}
+	}
+	response, _, err := l.client.fetchWith(opts)
 	if err != nil {
 		return nil, "", err
 	}

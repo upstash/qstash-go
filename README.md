@@ -72,7 +72,7 @@ body, err := io.ReadAll(req.Body)
 
 err := receiver.Verify(qstash.VerifyOptions{
     Signature: signature,
-    Body:      string(body),
+    Body:      body,
     Url:       "https://example.com", // optional
 })
 // handle err

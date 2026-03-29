@@ -1,15 +1,17 @@
 package qstash
 
 import (
-	"github.com/stretchr/testify/assert"
 	"os"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestKeysGet(t *testing.T) {
-	client := NewClientWithEnv()
+	client, err := NewClientWithEnv()
+	assert.NoError(t, err)
 
-	keys, err := client.Keys().Get()
+	keys, err := client.Keys.Get()
 	assert.NoError(t, err)
 
 	assert.Equal(t, keys.Current, os.Getenv("QSTASH_CURRENT_SIGNING_KEY"))

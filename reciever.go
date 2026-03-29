@@ -5,10 +5,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"github.com/golang-jwt/jwt/v5"
+	"io"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 var (
@@ -35,6 +37,15 @@ func NewReceiver(currentSigningKey, nextSigningKey string) *Receiver {
 	}
 }
 
+type MultiRegionReceiver struct {
+	EuCentral1 SigningKeys
+	UsEast1    SigningKeys
+}
+
+func NewMultiRegionReceiver() *Receiver {
+	return nil
+}
+
 type claims struct {
 	Body string `json:"body"`
 	jwt.RegisteredClaims
@@ -58,7 +69,17 @@ func verify(key string, opts VerifyOptions) (err error) {
 		return ErrInvalidSignature
 	}
 	h := sha256.New()
-	h.Write([]byte(opts.Body))
+	if opts.BodyReader != nil {
+		_, err = io.Copy(h, opts.BodyReader)
+		if err != nil {
+			return ErrInvalidSignature
+		}
+	} else if opts.Body != nil {
+		_, err = h.Write(opts.Body)
+		if err != nil {
+			return ErrInvalidSignature
+		}
+	}
 	bHash := h.Sum(nil)
 	b64hash := strings.Trim(base64.URLEncoding.EncodeToString(bHash), "=")
 	if strings.Trim(c.Body, "=") != b64hash {
@@ -73,9 +94,11 @@ type VerifyOptions struct {
 	// Url is the address of the endpoint where the request was sent to. When set to `None`, url is not check.
 	Url string
 	// Body is the raw request body.
-	Body string
+	BodyReader io.Reader
+	Body       []byte
 	// Tolerance is the duration to tolerate when checking `nbf` and `exp` claims, to deal with small clock differences among different servers.
 	Tolerance time.Duration
+	Region    string
 }
 
 // Verify verifies the signature of a request.

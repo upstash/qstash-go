@@ -5,12 +5,13 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"github.com/golang-jwt/jwt/v5"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/stretchr/testify/assert"
 )
 
 func sign(body string, key string) (string, error) {
@@ -62,7 +63,7 @@ func TestVerify(t *testing.T) {
 	err = receiver.Verify(VerifyOptions{
 		Signature: signature,
 		Url:       "https://example.com",
-		Body:      string(body),
+		Body:      body,
 	})
 	assert.NoError(t, err)
 }
@@ -79,7 +80,7 @@ func TestFailedVerify(t *testing.T) {
 	err = receiver.Verify(VerifyOptions{
 		Signature: signature,
 		Url:       "https://example.com/fail",
-		Body:      string(body),
+		Body:      body,
 	})
 	assert.Error(t, err)
 }

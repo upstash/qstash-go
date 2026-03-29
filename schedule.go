@@ -1,7 +1,6 @@
 package qstash
 
 import (
-	"encoding/json"
 	"fmt"
 	"net/http"
 )
@@ -25,7 +24,7 @@ type Schedule struct {
 	// Method is the HTTP method to use for the message.
 	Method string `json:"method"`
 	// Header is the headers of the message.
-	Header map[string][]string `json:"header,omitempty"`
+	Header http.Header `json:"header,omitempty"`
 	// Body is the body of the scheduled message if it is composed of UTF-8 characters only, empty otherwise.
 	Body string `json:"body,omitempty"`
 	// BodyBase64 is he base64 encoded body if the scheduled message body contains non-UTF-8 characters, empty otherwise.
@@ -50,108 +49,87 @@ type Schedule struct {
 	IsPaused bool `json:"isPaused,omitempty"`
 }
 
+func (s *Schedules) Create(destination string, cron string, o ...ScheduleOption) (string, error) {
+	req := request{
+		method: http.MethodPost,
+		path:   fmt.Sprintf("/v2/schedules/%s", destination),
+	}
+	for _, opt := range o {
+		err := opt(&req)
+		if err != nil {
+			return "", err
+		}
+	}
+	// Set cron header manually since it is a required field, not optional.
+	req.header.Set(upstashCronHeader, cron)
+	response, _, err := s.client.fetchWith(req)
+	if err != nil {
+		return "", err
+	}
+	result, err := parse[scheduleResponse](response)
+	if err != nil {
+		return "", err
+	}
+	return result.ScheduleId, err
+}
+
 type scheduleResponse struct {
 	ScheduleId string `json:"scheduleId"`
 }
 
-// Create creates a schedule to send messages periodically and returns the ID of created schedule.
-func (s *Schedules) Create(schedule ScheduleOptions) (string, error) {
-	opts := requestOptions{
-		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/Schedules/%s", schedule.Destination),
-		header: schedule.headers(),
-		body:   schedule.Body,
-	}
-	response, _, err := s.client.fetchWith(opts)
-	if err != nil {
-		return "", err
-	}
-	result, err := parse[scheduleResponse](response)
-	if err != nil {
-		return "", err
-	}
-	return result.ScheduleId, err
-}
-
-// CreateJSON creates a schedule to send messages periodically,
-// automatically serializing the body as JSON string, and setting content type to `application/json`.
-func (s *Schedules) CreateJSON(schedule ScheduleJSONOptions) (scheduleId string, err error) {
-	payload, err := json.Marshal(schedule.Body)
-	if err != nil {
-		return
-	}
-	opts := requestOptions{
-		method: http.MethodPost,
-		path:   fmt.Sprintf("/v2/schedules/%s", schedule.Destination),
-		header: schedule.headers(),
-		body:   string(payload),
-	}
-	response, _, err := s.client.fetchWith(opts)
-	if err != nil {
-		return
-	}
-	result, err := parse[scheduleResponse](response)
-	if err != nil {
-		return
-	}
-	return result.ScheduleId, err
-}
-
 // Get retrieves the schedule by its id.
-func (s *Schedules) Get(scheduleId string) (schedule Schedule, err error) {
-	opts := requestOptions{
+func (s *Schedules) Get(scheduleId string) (Schedule, error) {
+	opts := request{
 		method: http.MethodGet,
-		path:   fmt.Sprintf("/v2/Schedules/%s", scheduleId),
+		path:   fmt.Sprintf("/v2/schedules/%s", scheduleId),
 	}
 	response, _, err := s.client.fetchWith(opts)
 	if err != nil {
-		return
+		return Schedule{}, err
 	}
-	schedule, err = parse[Schedule](response)
-	return
+	return parse[Schedule](response)
 }
 
 // List retrieves all the schedules.
-func (s *Schedules) List() (schedules []Schedule, err error) {
-	opts := requestOptions{
+func (s *Schedules) List() ([]Schedule, error) {
+	opts := request{
 		method: http.MethodGet,
 		path:   "/v2/schedules",
 	}
 	response, _, err := s.client.fetchWith(opts)
 	if err != nil {
-		return
+		return nil, err
 	}
-	schedules, err = parse[[]Schedule](response)
-	return
+	return parse[[]Schedule](response)
 }
 
 // Pause pauses the schedule.
-// A paused schedule will not produce new messages until it is resumed.
-func (s *Schedules) Pause(scheduleId string) (err error) {
-	opts := requestOptions{
+// A paused schedule will not trigger new messages until it is resumed, even if the cron hits.
+func (s *Schedules) Pause(scheduleId string) error {
+	opts := request{
 		method: http.MethodPatch,
 		path:   fmt.Sprintf("/v2/schedules/%s/pause", scheduleId),
 	}
-	_, _, err = s.client.fetchWith(opts)
-	return
+	_, _, err := s.client.fetchWith(opts)
+	return err
 }
 
 // Resume resumes the schedule.
-func (s *Schedules) Resume(scheduleId string) (err error) {
-	opts := requestOptions{
+func (s *Schedules) Resume(scheduleId string) error {
+	opts := request{
 		method: http.MethodPatch,
 		path:   fmt.Sprintf("/v2/schedules/%s/resume", scheduleId),
 	}
-	_, _, err = s.client.fetchWith(opts)
-	return
+	_, _, err := s.client.fetchWith(opts)
+	return err
 }
 
 // Delete deletes the schedule.
-func (s *Schedules) Delete(scheduleId string) (err error) {
-	opts := requestOptions{
+func (s *Schedules) Delete(scheduleId string) error {
+	opts := request{
 		method: http.MethodDelete,
 		path:   fmt.Sprintf("/v2/schedules/%s", scheduleId),
 	}
-	_, _, err = s.client.fetchWith(opts)
-	return
+	_, _, err := s.client.fetchWith(opts)
+	return err
 }
